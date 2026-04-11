@@ -124,11 +124,38 @@ class RNNLayer(nn.Module):
 
 
 class AttentionLSTM(BaseModel):
-    """Attention-based LSTM model.
+    """Attention-based LSTM model for sequence classification.
 
-    This model applies a separate LSTM layer for each feature, computes
-    attention weights over the sequence outputs, and uses the attention-
-    weighted context vector for prediction.
+    This model extends a standard RNN-based architecture by replacing the
+    final hidden state representation with an attention-weighted aggregation
+    over all timesteps.
+
+    For each feature:
+    - The input sequence is embedded using ``EmbeddingModel``
+    - The embedded sequence is processed by an LSTM layer
+    - Attention scores are computed for each timestep
+    - A softmax is applied to obtain attention weights
+    - A weighted sum of LSTM outputs produces a context vector
+
+    The context vectors from all features are concatenated and passed
+    through a fully connected layer for prediction.
+
+    The model supports variable-length sequences via masking and returns
+    attention weights for each feature, enabling interpretability.
+
+    Args:
+        dataset (SampleDataset): PyHealth dataset object.
+        embedding_dim (int): Dimension of embeddings. Default is 128.
+        hidden_dim (int): Hidden dimension of LSTM. Default is 128.
+        **kwargs: Additional arguments passed to the underlying RNNLayer.
+
+    Returns:
+        Dict[str, torch.Tensor]:
+            - loss: scalar training loss
+            - y_prob: predicted probabilities
+            - y_true: ground truth labels
+            - logit: raw logits
+            - attention_weights: dict mapping feature keys to attention weights
     """
 
     def __init__(
@@ -167,19 +194,23 @@ class AttentionLSTM(BaseModel):
     def forward(self, **kwargs) -> Dict[str, torch.Tensor]:
         """Forward propagation.
 
-        The label `kwargs[self.label_key]` is a list of labels for each patient.
+        Processes input features, applies LSTM + attention for each feature,
+        and produces prediction outputs.
+
+        The label `kwargs[self.label_key]` is a tensor of labels for each patient.
 
         Args:
-            **kwargs: keyword arguments for the model. The keys must contain
-                all the feature keys and the label key.
+            **kwargs: Must contain all feature keys and the label key.
 
         Returns:
-            Dict[str, torch.Tensor]: A dictionary with the following keys:
-                - loss: a scalar tensor representing the loss.
-                - y_prob: a tensor representing the predicted probabilities.
-                - y_true: a tensor representing the true labels.
-                - logit: a tensor representing the logits.
-                - embed (optional): a tensor representing the patient embeddings if requested.
+            Dict[str, torch.Tensor]:
+                - loss: scalar tensor representing the loss
+                - y_prob: predicted probabilities
+                - y_true: ground truth labels
+                - logit: raw logits
+                - embed (optional): patient embeddings if requested
+                - attention_weights: dict mapping feature keys to attention weights,
+                representing the importance of each timestep
         """
         patient_emb = []
         
